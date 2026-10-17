@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+reports/
+
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+gateway/.env
+
+# Terraform state contains secrets and must live in a protected remote backend in real life
+terraform/**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Claude Code personal settings
+.claude/settings.local.json
+CLAUDE.local.md
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/

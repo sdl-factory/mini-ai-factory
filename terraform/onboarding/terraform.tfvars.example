@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars if your cluster context has a different name.
+kube_context = "kind-factory"

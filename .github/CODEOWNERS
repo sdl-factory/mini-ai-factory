@@ -1,0 +1,25 @@
+# Replace delorenzostefano with your real username (the human, not the agent account).
+
+# With "Require review from Code Owners" enabled in branch protection, nothing in these
+
+# paths can merge without your approval. This is the real control behind the guard script.
+
+# Everything needs a human owner's review by default.
+
+*                          @delorenzostefano
+
+# Verification plane: pipelines, guard, acceptance tests. Never changed by agents.
+
+/.github/ @delorenzostefano
+/scripts/guard_tests.py @delorenzostefano
+/tests/acceptance/ @delorenzostefano
+
+# Agent context and agent configuration: changing these changes every agent's behaviour.
+
+/AGENTS.md @delorenzostefano
+/CLAUDE.md @delorenzostefano
+/.claude/ @delorenzostefano
+
+# Specs are human intent.
+
+/specs/ @delorenzostefano

@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The namespace itself (with quotas, limits and network policies) is created by the
+# onboarding module in terraform/onboarding, not by the application.
+namespace: mini-factory
+resources:
+  - deployment.yaml
+  - service.yaml

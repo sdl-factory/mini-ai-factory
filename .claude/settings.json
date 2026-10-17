@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./gateway/.env)",
+      "Edit(./.github/**)",
+      "Edit(./tests/acceptance/**)",
+      "Edit(./scripts/guard_tests.py)",
+      "Edit(./.claude/**)"
+    ]
+  }
+}

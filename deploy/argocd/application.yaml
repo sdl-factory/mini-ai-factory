@@ -1,0 +1,21 @@
+# GitOps: Argo CD keeps the cluster in sync with deploy/k8s on the main branch.
+# Replace delorenzostefano with the organization that owns the repository. A public
+# repository needs no credentials; for a private one, add a read-only credential in Argo CD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notes-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sdl-factory/mini-ai-factory.git
+    targetRevision: main
+    path: deploy/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mini-factory
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

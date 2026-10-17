@@ -1,0 +1,7 @@
+# Runtime dependencies. Pinned, including important transitive ones (starlette), and
+# chosen at least two weeks after release: brand-new versions are where malicious or
+# broken releases tend to slip through.
+fastapi==0.142.2
+pydantic==2.13.5
+starlette==1.7.0
+uvicorn==0.54.0

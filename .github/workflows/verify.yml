@@ -1,0 +1,185 @@
+# Verification plane: every change, from a human or an agent, must pass these gates.
+# Agents cannot edit this file: it is protected by CODEOWNERS and by scripts/guard_tests.py.
+#
+# Supply-chain habits shown here: every third-party action is pinned to a full commit SHA
+# (a tag can be moved to malicious code; a SHA cannot), the token is read-only, and
+# untrusted values such as the PR body reach scripts through env, never through ${{ }}.
+name: verify
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality (lint, tests, guard, traceability)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint and format
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Unit and acceptance tests with coverage
+        run: pytest --cov=app --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
+
+      - name: Verification guard (no weakened tests, no protected-path changes)
+        if: github.event_name == 'pull_request'
+        env:
+          ALLOW_PROTECTED_CHANGES: ${{ contains(github.event.pull_request.labels.*.name, 'approved-protected-change') }}
+          BASE_REF: ${{ github.base_ref }}
+        run: python scripts/guard_tests.py --base "origin/${BASE_REF}"
+
+      - name: Traceability (pull request links its spec)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        # HTML comments are removed first: hidden text (like the template's own hints)
+        # must not satisfy the check.
+        run: |
+          visible_body=$(printf '%s' "$PR_BODY" | perl -0pe 's/<!--.*?-->//gs')
+          if ! printf '%s' "$visible_body" | grep -Eq 'specs/[0-9]{3}-|No spec:'; then
+            echo "::error::Link the spec this PR implements (specs/NNN-...md), or write 'No spec: <reason>'."
+            exit 1
+          fi
+
+      - name: Keep test reports as evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports
+          path: reports/
+          if-no-files-found: ignore
+
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The open-source gitleaks CLI, pinned to a version and verified against a hard-coded
+      # SHA-256, so a tampered download fails the build instead of running.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${file}"
+          echo "${GITLEAKS_SHA256}  ${file}" | sha256sum -c -
+          tar xzf "${file}" gitleaks
+
+      - name: Scan the full git history for secrets
+        run: ./gitleaks git . --no-banner --redact --exit-code 1
+
+  security:
+    name: security (dependencies, misconfig, image, SBOM)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan repository (vulnerable dependencies, secrets, IaC and manifest misconfigurations)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Build container image
+        run: docker build -t "mini-ai-factory:${GITHUB_SHA}" .
+
+      - name: Scan container image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: mini-ai-factory:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+
+      - name: Generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: mini-ai-factory:${{ github.sha }}
+          format: cyclonedx
+          output: sbom.cdx.json
+          skip-setup-trivy: true
+
+      - name: Keep SBOM as evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
+  evidence:
+    name: evidence record
+    if: always()
+    needs: [quality, secrets, security]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Write evidence record
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          SECRETS: ${{ needs.secrets.result }}
+          SECURITY: ${{ needs.security.result }}
+          AUTHOR: ${{ github.event.pull_request.user.login || github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "# Evidence record"
+            echo ""
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Pull request: ${PR_NUMBER:-none (push to main)}"
+            echo "- Author of the change: ${AUTHOR}"
+            echo "- Pipeline run: ${RUN_URL}"
+            echo "- Recorded at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            echo "| Gate | Result |"
+            echo "|---|---|"
+            echo "| Quality: lint, tests, coverage, guard, traceability | ${QUALITY} |"
+            echo "| Secrets: gitleaks | ${SECRETS} |"
+            echo "| Security: dependencies, misconfig, image scan, SBOM | ${SECURITY} |"
+            echo ""
+            echo "Human approval is recorded on the pull request itself."
+          } > evidence.md
+          cat evidence.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep evidence record
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence
+          path: evidence.md

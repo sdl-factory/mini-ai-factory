@@ -1,0 +1,52 @@
+# Control plane: the model gateway. Every model call in the factory goes through here, so
+# this is where model access, budgets, rate limits and cost attribution are enforced.
+#
+# Networks are segmented on purpose:
+#   factory-net  - the gateway and the agent sandboxes (the gateway also reaches the internet
+#                  through it, to call the model provider)
+#   gateway-db   - internal only: the database is reachable by the gateway and nothing else
+services:
+  litellm:
+    # Pinned release, not :latest. LiteLLM signs its images with cosign; verifying the
+    # signature before running is a good exercise (see docs/GUIDE.md, phase 5).
+    image: ghcr.io/berriai/litellm:v1.103.2
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "127.0.0.1:4000:4000"   # admin UI and API reachable from this machine only
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set it in gateway/.env}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set it in gateway/.env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set it in gateway/.env}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:?set it in gateway/.env}@db:5432/litellm
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    networks: [factory-net, gateway-db]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in gateway/.env}
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [gateway-db]
+    restart: unless-stopped
+
+networks:
+  factory-net:
+    name: factory-net
+  gateway-db:
+    internal: true
+
+volumes:
+  postgres_data:

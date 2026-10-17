@@ -1,0 +1,32 @@
+[project]
+name = "mini-ai-factory"
+version = "0.1.0"
+description = "A small AI-native software factory for learning: a Notes API built by agents, verified by a pipeline they cannot change."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "spec(id): acceptance test that verifies a spec in specs/ (see tests/acceptance/conftest.py)",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+# Lowering this number is a protected change: the guard script fails pull requests that do it.
+fail_under = 85
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
