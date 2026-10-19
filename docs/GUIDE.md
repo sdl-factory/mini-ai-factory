@@ -430,6 +430,68 @@ control (phase 7) matters.
 
 ---
 
+## Phase 5b: A local model for on-premises projects
+
+Some clients require that their code and data never leave their premises. The gateway makes
+that a per-project policy instead of a different architecture: a local open-weight model is
+just another route behind the same API, and the project's key decides which routes it may
+use.
+
+### 1. Serve a small model on the host
+
+Install [Ollama](https://ollama.com) natively and pull a model with tool support that fits
+your laptop, for example `ollama pull qwen3:8b` (about 5 GB). On macOS, run Ollama natively,
+not in Docker: containers run in a Linux VM without access to the Apple GPU, so the model
+would run on CPU only. On a Linux server with GPUs, it would run as a container.
+
+`gateway/config.yaml` declares the model as `local-qwen3-8b` (route
+`ollama_chat/qwen3:8b` at `host.docker.internal:11434`), with a price of 0 because no
+provider bills it. Reload the gateway:
+
+```bash
+cd gateway
+docker compose up -d
+```
+
+### 2. Onboard an on-premises project
+
+```bash
+./create-project-key.sh client-onprem 1 local-qwen3-8b
+read -rs OKEY && export OKEY   # paste the key; it stays out of your shell history
+```
+
+### 3. Same API, two routes
+
+```bash
+# the on-premises key on the local model: same request and response format as Claude
+curl -s localhost:4000/v1/messages -H "Authorization: Bearer $OKEY" -H 'content-type: application/json' \
+  -d '{"model":"local-qwen3-8b","max_tokens":300,"messages":[{"role":"user","content":"Say hello in five words. /no_think"}]}'
+# the on-premises key asking for a hosted model: rejected by policy (403)
+curl -s localhost:4000/v1/messages -H "Authorization: Bearer $OKEY" -H 'content-type: application/json' \
+  -d '{"model":"claude-haiku-5-5","max_tokens":50,"messages":[{"role":"user","content":"Hi"}]}'
+```
+
+(`/no_think` turns off Qwen3's reasoning phase, which would otherwise use up `max_tokens`.)
+
+Then turn off your network and repeat the first call, and the same call with the
+`mini-factory` key on `claude-haiku-5-5`. The local model keeps answering; the hosted one
+fails at the upstream hop (`AnthropicException ... Cannot connect to host`), after about 20
+seconds of retries and timeouts.
+
+### 4. Think about it
+
+- Fallbacks: LiteLLM can fall back to another model when one fails. From hosted to local
+  keeps the data in place but silently lowers quality; from local to hosted would send an
+  on-premises client's data out during an outage. Fallbacks are a policy decision.
+- Cost: the local model costs 0 in the gateway, so budgets don't limit it. Set an internal
+  rate per token for chargeback, and limit it with rate limits instead.
+- Capability: the plumbing is model-agnostic, but capability isn't. According to LiteLLM's
+  documentation, Claude Code can run on a non-Anthropic model through the gateway, but a
+  small local model may struggle with an agent's long context and tool calls. Evaluate a
+  model before allowing a project to depend on it.
+
+---
+
 ## Phase 6: The agent at work
 
 ### 1. Give the agent account a scoped token

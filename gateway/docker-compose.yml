@@ -20,6 +20,8 @@ services:
       DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:?set it in gateway/.env}@db:5432/litellm
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach a model server on the host (also on Linux)
     networks: [factory-net, gateway-db]
     depends_on:
       db:
