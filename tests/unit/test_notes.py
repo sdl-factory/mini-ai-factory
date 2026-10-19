@@ -1,6 +1,9 @@
 """Unit tests for the Notes API. Agents may add tests here, but must never delete or weaken them."""
 
-from app.main import NoteIn, NoteStore
+import pytest
+from pydantic import ValidationError
+
+from app.main import NoteIn, NoteStore, normalise_tags
 
 
 def test_health_returns_ok(client):
@@ -12,7 +15,7 @@ def test_health_returns_ok(client):
 def test_create_note_returns_201_and_assigns_id(client):
     response = client.post("/notes", json={"title": "First", "body": "Hello"})
     assert response.status_code == 201
-    assert response.json() == {"id": 1, "title": "First", "body": "Hello"}
+    assert response.json() == {"id": 1, "title": "First", "body": "Hello", "tags": []}
 
 
 def test_body_defaults_to_empty_string(client):
@@ -66,3 +69,34 @@ def test_store_clear_resets_ids():
     store.clear()
     assert store.list() == []
     assert store.create(NoteIn(title="again")).id == 1
+
+
+def test_normalise_tags_trims_lowercases_and_dedupes_in_order():
+    assert normalise_tags(["  Work ", "work", "Urgent", "URGENT"]) == ["work", "urgent"]
+
+
+def test_note_in_defaults_to_no_tags():
+    assert NoteIn(title="x").tags == []
+
+
+def test_note_in_normalises_tags():
+    assert NoteIn(title="x", tags=[" A ", "a", "B-1"]).tags == ["a", "b-1"]
+
+
+@pytest.mark.parametrize("bad", ["", "  ", "x" * 21, "a b", "a_b", "café"])
+def test_note_in_rejects_invalid_tag(bad):
+    with pytest.raises(ValidationError):
+        NoteIn(title="x", tags=[bad])
+
+
+def test_note_in_rejects_more_than_five_distinct_tags():
+    with pytest.raises(ValidationError):
+        NoteIn(title="x", tags=list("abcdef"))
+
+
+def test_store_list_filters_by_normalised_tag():
+    store = NoteStore()
+    store.create(NoteIn(title="one", tags=["work"]))
+    store.create(NoteIn(title="two"))
+    assert [n.title for n in store.list(" WORK ")] == ["one"]
+    assert store.list("nope") == []
