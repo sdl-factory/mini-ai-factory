@@ -1,6 +1,6 @@
 # 001: Tag notes and filter by tag
 
-Status: pending
+Status: implemented
 Owner: <your name>
 Risk: low
 
