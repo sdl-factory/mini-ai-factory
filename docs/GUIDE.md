@@ -390,13 +390,43 @@ tokens and cost.
 ### 4. Watch a budget stop a runaway
 
 ```bash
-./create-project-key.sh budget-test 0.01
+./create-project-key.sh budget-test 0.00002
 # send the Haiku request above in a loop with this new key until it is rejected
 ```
 
-Record how the rejection looks, then delete the `budget-test` key in the UI. This is your
-answer to "how do you stop a runaway agent from burning the budget?"
+The budget is tiny on purpose: a short Haiku call costs well under a thousandth of a cent,
+so a budget of $0.01 would need over a thousand calls. Expect a few calls to succeed, then
+`429 budget_exceeded`. Count them: the budget is checked before each request against the
+spend so far, so the last allowed request overshoots it. With parallel requests, every
+in-flight request can overshoot, which is why budgets are paired with `max_tokens`, rate
+limits and a spend limit at the provider. Record how the rejection looks, then delete the
+`budget-test` key in the UI. This is how a gateway stops a runaway agent from burning the
+budget.
 
+### 5. Pull the kill switch
+
+A budget stops one project slowly; an incident needs every agent stopped now. The kill
+switch blocks all agent keys (those tagged `plane: generation`) in one command, without
+touching the provider key or the admin's access, and it's reversible.
+
+```bash
+cd ..
+./gateway/kill-switch.sh status
+./gateway/kill-switch.sh block "drill: testing the kill switch"
+curl -s localhost:4000/v1/messages -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"model":"claude-haiku-5-5","max_tokens":20,"messages":[{"role":"user","content":"Hi"}]}'
+./gateway/kill-switch.sh unblock "drill complete"
+```
+
+The call between block and unblock fails with `Key is blocked`; after unblocking, the same
+key works again. Add a project name to block a single project. Every block and unblock
+needs a reason, which is recorded with your user name through LiteLLM's
+`litellm-changed-by` header.
+
+Then think about what it does not stop: requests already in flight, the sandbox's other
+credentials (its GitHub token), and anything that reaches a model without going through the
+gateway. A kill switch is only as complete as the chokepoint it controls; that's why egress
+control (phase 7) matters.
 
 ---
 
