@@ -18,6 +18,19 @@ model_list:
     litellm_params:
       model: anthropic/claude-opus-5-5
       api_key: os.environ/ANTHROPIC_API_KEY
+  # A local open-weight model, for projects whose data must not leave the premises. Same
+  # gateway, same API and same keys as the hosted models: only the route differs. Ollama
+  # runs on the host (natively, to use the GPU); on a Linux server it would be a container.
+  # Price 0 because no provider bills it; set an internal rate here for chargeback.
+  - model_name: local-qwen3-8b
+    litellm_params:
+      model: ollama_chat/qwen3:8b
+      api_base: http://host.docker.internal:11434
+      keep_alive: "10m"
+    model_info:
+      supports_function_calling: true
+      input_cost_per_token: 0
+      output_cost_per_token: 0
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

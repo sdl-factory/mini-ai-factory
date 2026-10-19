@@ -47,7 +47,7 @@ flowchart LR
 | `scripts/guard_tests.py` | Fails pull requests that delete, skip or weaken tests, or touch protected paths |
 | `.github/workflows/verify.yml` | The verification pipeline, with every action pinned to a commit SHA |
 | `AGENTS.md`, `CLAUDE.md`, `.claude/` | Agent context and client-side guardrails |
-| `gateway/` | LiteLLM model gateway, per-project keys, cost report and kill switch |
+| `gateway/` | LiteLLM model gateway: hosted and local models, per-project keys, cost report, kill switch |
 | `sandbox/` | Disposable agent container |
 | `terraform/` | Reusable "project" module: namespace, quotas, network policies, identity, access |
 | `deploy/` | Kubernetes manifests and the Argo CD application |
