@@ -1,0 +1,7 @@
+{
+  "alice": ["everyone", "hr"],
+  "bob": ["everyone", "engineering"],
+  "carol": ["everyone", "exec"],
+  "dave": ["everyone", "client-acme"],
+  "erin": ["everyone", "security"]
+}

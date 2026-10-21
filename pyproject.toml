@@ -13,7 +13,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "rag"]
 branch = true
 
 [tool.coverage.report]
