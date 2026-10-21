@@ -30,3 +30,6 @@ CLAUDE.local.md
 .DS_Store
 .idea/
 .vscode/
+
+# Evidence packs are generated; in real life they go to append-only storage
+evidence/
