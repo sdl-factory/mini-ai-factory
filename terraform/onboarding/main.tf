@@ -16,15 +16,15 @@ module "mini_factory" {
 
 # Onboarding a second project is one more block. Try it in phase 3, then prove that
 # workloads in one namespace cannot reach the other.
-#
-# module "client_a" {
-#   source     = "../modules/project"
-#   name       = "client-a"
-#   risk_class = "high"
-#   quota = {
-#     requests_cpu    = "2"
-#     requests_memory = "2Gi"
-#     limits_memory   = "4Gi"
-#     pods            = "20"
-#   }
-# }
+
+module "client_a" {
+  source     = "../modules/project"
+  name       = "client-a"
+  risk_class = "high"
+  quota = {
+    requests_cpu    = "2"
+    requests_memory = "2Gi"
+    limits_memory   = "4Gi"
+    pods            = "20"
+  }
+}

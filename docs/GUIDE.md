@@ -298,9 +298,37 @@ Calico (kind's documentation explains how to disable the default CNI) and test a
 
 ### 3. Onboard a second project
 
-Uncomment the `client_a` module in `terraform/onboarding/main.tf`, `terraform apply`, and
-repeat the isolation test between `client-a` and `mini-factory`. Onboarding a project is now
-a reviewed, one-block change. In the real factory, this would be a pull request.
+Uncomment the `client_a` module in `terraform/onboarding/main.tf`, then `terraform init`,
+`plan` and `apply` (or `tofu`, with OpenTofu). Onboarding a project is now a reviewed,
+one-block change. In the real factory, this would be a pull request. Commit
+`.terraform.lock.hcl`: it pins the provider versions and their checksums.
+
+Then prove the isolation with one command:
+
+```bash
+./terraform/isolation-test.sh            # defaults: mini-factory and client-a
+```
+
+It starts a small web server and a client in each tenant and a pod in `default`, then
+checks that each tenant reaches its own service, that neither reaches the other, that
+nothing outside reaches in, that tenants can't reach the internet, and that a root pod is
+rejected. The two "allow" checks matter: a broken network would pass every "deny" check.
+kind enforces NetworkPolicies out of the box since v0.24, so no extra CNI is needed there.
+
+Exercises:
+
+1. Delete `default-deny-all` in `client-a` and run the test again. Nothing breaks:
+   `allow-same-namespace` also selects every pod for ingress and egress, and a pod is
+   isolated in a direction as soon as any policy selecting it lists that direction.
+   Default-deny is defence in depth: it keeps the namespace closed when the other
+   policies change later.
+2. Run `plan`: it shows the deleted policy as drift (`1 to add`). Repair it with `apply`.
+   A resource's creation timestamp shows when it was recreated.
+3. Compare `risk_class` for the two projects in the module: it only sets a label. A risk
+   class that changes nothing is decoration; a real platform would use it to select
+   dedicated nodes, admission policies and stricter gates.
+4. The module disables the API token for the project's service account, but Kubernetes
+   also creates a `default` service account in every namespace, which still mounts one.
 
 ### 4. Test the secrets gate (with a fake token only)
 

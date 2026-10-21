@@ -50,7 +50,7 @@ flowchart LR
 | `gateway/` | LiteLLM model gateway: hosted and local models, per-project keys and data classes, guardrails, cost report, kill switch |
 | `rag/` | Retrieval with document-level permissions, answering through the gateway |
 | `sandbox/` | Disposable agent container |
-| `terraform/` | Reusable "project" module: namespace, quotas, network policies, identity, access |
+| `terraform/` | Reusable "project" module (namespace, quotas, network policies, identity, access), two onboarded projects and an isolation test |
 | `deploy/` | Kubernetes manifests and the Argo CD application |
 | `docs/GUIDE.md` | Step-by-step build guide, in phases |
 
