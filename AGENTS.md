@@ -36,6 +36,8 @@ Run the tests and the linter before every commit. CI runs the same commands.
    they pass, the build fails until you update the status.)
 6. Commit with a clear message, push your branch, and open a pull request using the
    template. Map every acceptance criterion to the test that verifies it.
+   For a change that implements no spec, start the pull request body with
+   "No spec: <reason>" instead.
 
 ## Rules you must never break
 
