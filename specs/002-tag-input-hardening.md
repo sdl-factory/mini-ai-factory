@@ -1,6 +1,6 @@
 # 002: Reject ambiguous tag input
 
-Status: pending
+Status: implemented
 Owner: delorenzostefano
 Risk: low
 
