@@ -456,7 +456,7 @@ docker compose up -d
 ### 2. Onboard an on-premises project
 
 ```bash
-./create-project-key.sh client-onprem 1 local-qwen3-8b
+./create-project-key.sh client-onprem 1 confidential
 read -rs OKEY && export OKEY   # paste the key; it stays out of your shell history
 ```
 
@@ -489,6 +489,88 @@ seconds of retries and timeouts.
   documentation, Claude Code can run on a non-Anthropic model through the gateway, but a
   small local model may struggle with an agent's long context and tool calls. Evaluate a
   model before allowing a project to depend on it.
+
+---
+
+## Phase 5c: Guardrails and data classes
+
+Two controls with different jobs. Data classes decide where data may go: a project declares
+the class of data it handles, and its key may only use the models that class allows.
+Guardrails decide what a model gets to see: they inspect every request before it is sent.
+
+### 1. Data classes
+
+`create-project-key.sh` takes a data class instead of a model list: `public` and `internal`
+may use the hosted models, `confidential` only the local one. The class is stored in the
+key's metadata.
+
+```bash
+cd gateway
+./create-project-key.sh bank-confidential 1 confidential
+read -rs CKEY && export CKEY
+curl -s localhost:4000/v1/messages -H "Authorization: Bearer $CKEY" -H 'content-type: application/json' \
+  -d '{"model":"claude-sonnet-5-5","max_tokens":50,"messages":[{"role":"user","content":"Hi"}]}'
+```
+
+Expect `403 key_model_access_denied`: the request is rejected before any content check runs.
+
+### 2. An input guardrail
+
+`gateway/config.yaml` defines `input-secrets-and-pii`, LiteLLM's built-in content filter,
+on every request (`default_on`) before the model call (`pre_call`). Secrets (GitHub and AWS
+tokens, Anthropic keys, the gateway's own keys) are blocked: a secret in a prompt is an
+incident to notice. Personal data (email, IBAN, Swiss IBAN with or without spaces, Swiss
+AHV number) is masked, so work can continue without it. Per-key guardrails need a LiteLLM
+Enterprise licence, so this one applies to every project. After changing the config,
+recreate the container: `config.yaml` is mounted as a single file, so `docker compose up -d`
+does not notice the change.
+
+```bash
+docker compose up -d --force-recreate litellm
+```
+
+### 3. Exercises: predict first, then test
+
+Write down MASKED, BLOCKED or PASSED for each input before you send it, then ask the model
+to repeat the text exactly, which shows what it received.
+
+1. `jane.doe@example.com`, `756.1234.5678.97` and `CH93 0076 2011 6238 5295 7`. In this
+   lab the email and AHV number were masked, but the prebuilt `iban` pattern missed the
+   spaced IBAN, the way IBANs are usually written. The `swiss_iban` regex in the config
+   closes that gap: `\bCH\d{2}(?: ?[0-9A-Z]{4}){4} ?[0-9A-Z]\b`.
+2. A randomly generated fake `ghp_` token: blocked with `Content blocked: github_token
+   pattern detected`, naming the guardrail and the pattern.
+3. Try to evade it: `jane dot doe at example dot com`, an AHV number without dots, the fake
+   token split by spaces, the fake token in base64. All of them pass, and the model still
+   understands them. Kubernetes Secrets are base64-encoded, so an agent reading one sends
+   real credentials past every regex.
+4. Read what the gateway logged:
+   ```bash
+   docker compose exec -T db psql -U litellm -d litellm -At -c "select \"startTime\", status, metadata->>'guardrail_information' from \"LiteLLM_SpendLogs\" order by \"startTime\" desc limit 5"
+   ```
+   The prompt itself isn't stored. Each request records the guardrail's status
+   (`guardrail_intervened` when it blocked), a risk score, the number of patterns checked
+   and its duration (well under a millisecond), with the matched values redacted. The
+   evasions score 0: a detection gap is also a monitoring gap.
+5. With the `confidential` key, send personal data to the local model. It is still masked:
+   data minimisation applies on-premises too, because the model's output ends up in code,
+   pull requests and logs that more people can read.
+6. Without running it: an agent reads a file containing a real AWS key, and every following
+   request is blocked. What should happen? (Kill the session; revoke the key first and
+   investigate its use second; then ask why push protection and the secrets gate didn't
+   stop it from being committed.)
+
+### 4. Think about it
+
+Pattern guardrails stop accidents, not adversaries. They are cheap and deterministic, but
+they miss paraphrases, encodings and formats nobody wrote a regex for. Layer them: regex at
+the gateway for known formats, entity recognition where latency allows, and routing by data
+class for anything truly confidential. Keep secrets out of the agent's environment in the
+first place, and alert on repeated guardrail hits per key.
+
+Note also that `thinking` blocks appear in the responses although no request asked for
+them: some models think by default, and thinking tokens are billed as output. A gateway can
+set a default effort and `max_tokens` per route as part of cost control.
 
 ---
 

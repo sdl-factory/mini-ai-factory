@@ -32,6 +32,52 @@ model_list:
       input_cost_per_token: 0
       output_cost_per_token: 0
 
+# Input guardrail on every request (default_on), before the model sees it (pre_call).
+# Secrets are blocked: a secret in a prompt is an incident to notice, not something to hide.
+# Personal data is masked, so the work can continue without it. Regexes are a safety net,
+# not a guarantee: confidential data is protected by routing (data classes), not by this.
+# Per-key guardrails need a LiteLLM Enterprise licence, so this applies to all projects.
+guardrails:
+  - guardrail_name: input-secrets-and-pii
+    litellm_params:
+      guardrail: litellm_content_filter
+      mode: pre_call
+      default_on: true
+      patterns:
+        # Secrets: block the request
+        - pattern_type: prebuilt
+          pattern_name: github_token
+          action: BLOCK
+        - pattern_type: prebuilt
+          pattern_name: aws_access_key
+          action: BLOCK
+        - pattern_type: prebuilt
+          pattern_name: aws_secret_key
+          action: BLOCK
+        - pattern_type: regex
+          name: anthropic_api_key
+          pattern: "sk-ant-[A-Za-z0-9_-]{20,}"
+          action: BLOCK
+        - pattern_type: regex
+          name: gateway_virtual_key
+          pattern: "sk-[A-Za-z0-9]{20,}"
+          action: BLOCK
+        # Personal data: mask it
+        - pattern_type: prebuilt
+          pattern_name: email
+          action: MASK
+        - pattern_type: prebuilt
+          pattern_name: iban
+          action: MASK
+        - pattern_type: regex
+          name: swiss_iban
+          pattern: '\bCH\d{2}(?: ?[0-9A-Z]{4}){4} ?[0-9A-Z]\b'
+          action: MASK
+        - pattern_type: regex
+          name: swiss_ahv_number
+          pattern: '\b756\.\d{4}\.\d{4}\.\d{2}\b'
+          action: MASK
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
