@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.main import NoteIn, NoteStore, normalise_tags
+from app.main import NoteIn, NoteStore, normalise_tags, validate_tag
 
 
 def test_health_returns_ok(client):
@@ -100,3 +100,13 @@ def test_store_list_filters_by_normalised_tag():
     store.create(NoteIn(title="two"))
     assert [n.title for n in store.list(" WORK ")] == ["one"]
     assert store.list("nope") == []
+
+
+def test_validate_tag_normalises_valid_input():
+    assert validate_tag("  Work-1 ") == "work-1"
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "a_b", "a" * 21, "K", "café"])
+def test_validate_tag_rejects_invalid_input(raw):
+    with pytest.raises(ValueError):
+        validate_tag(raw)

@@ -8,9 +8,10 @@ from __future__ import annotations
 import re
 from itertools import count
 from threading import Lock
+from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Response, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 app = FastAPI(title="Notes API", version="0.1.0")
 
@@ -23,9 +24,30 @@ def normalise_tag(tag: str) -> str:
     return tag.strip().lower()
 
 
+def validate_tag(tag: str) -> str:
+    """Return the normalised tag, or raise ValueError if the raw input is not a valid tag.
+
+    The ASCII check runs before normalisation, so characters that only become ASCII
+    after lowercasing (such as the Kelvin sign) are rejected.
+    """
+    if not tag.isascii():
+        raise ValueError("tags must contain only ASCII characters")
+    tag = normalise_tag(tag)
+    if not TAG_PATTERN.fullmatch(tag):
+        raise ValueError("tags must be 1-20 characters of a-z, 0-9 or '-'")
+    return tag
+
+
 def normalise_tags(tags: list[str]) -> list[str]:
     """Normalise tags and drop duplicates, keeping the order of first appearance."""
     return list(dict.fromkeys(normalise_tag(tag) for tag in tags))
+
+
+def _validate_optional_tag(tag: str | None) -> str | None:
+    return None if tag is None else validate_tag(tag)
+
+
+TagFilter = Annotated[str | None, AfterValidator(_validate_optional_tag)]
 
 
 class NoteIn(BaseModel):
@@ -38,12 +60,9 @@ class NoteIn(BaseModel):
     @field_validator("tags")
     @classmethod
     def validate_tags(cls, tags: list[str]) -> list[str]:
-        tags = normalise_tags(tags)
+        tags = list(dict.fromkeys(validate_tag(tag) for tag in tags))
         if len(tags) > MAX_TAGS:
             raise ValueError(f"at most {MAX_TAGS} tags are allowed")
-        for tag in tags:
-            if not TAG_PATTERN.fullmatch(tag):
-                raise ValueError("tags must be 1-20 characters of a-z, 0-9 or '-'")
         return tags
 
 
@@ -104,7 +123,7 @@ def create_note(data: NoteIn) -> Note:
 
 
 @app.get("/notes")
-def list_notes(tag: str | None = None) -> list[Note]:
+def list_notes(tag: TagFilter = None) -> list[Note]:
     return store.list(tag)
 
 
