@@ -94,7 +94,7 @@ store = NoteStore()
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    """Liveness and readiness endpoint. Checks only this process, never dependencies."""
+    """Liveness and readiness probe endpoint. Checks only this process, never dependencies."""
     return {"status": "ok"}
 
 
