@@ -48,6 +48,7 @@ flowchart LR
 | `.github/workflows/verify.yml` | The verification pipeline, with every action pinned to a commit SHA |
 | `AGENTS.md`, `CLAUDE.md`, `.claude/` | Agent context and client-side guardrails |
 | `gateway/` | LiteLLM model gateway: hosted and local models, per-project keys and data classes, guardrails, cost report, kill switch |
+| `rag/` | Retrieval with document-level permissions, answering through the gateway |
 | `sandbox/` | Disposable agent container |
 | `terraform/` | Reusable "project" module: namespace, quotas, network policies, identity, access |
 | `deploy/` | Kubernetes manifests and the Argo CD application |
