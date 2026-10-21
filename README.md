@@ -51,7 +51,7 @@ flowchart LR
 | `rag/` | Retrieval with document-level permissions, answering through the gateway |
 | `governance/` | Evidence pack for a merged pull request |
 | `sandbox/` | Disposable agent container |
-| `terraform/` | Reusable "project" module: namespace, quotas, network policies, identity, access |
+| `terraform/` | Reusable "project" module (namespace, quotas, network policies, identity, access), two onboarded projects and an isolation test |
 | `deploy/` | Kubernetes manifests and the Argo CD application |
 | `docs/GUIDE.md` | Step-by-step build guide, in phases |
 
